@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 
 
@@ -26,8 +27,11 @@ export default function Home() {
   if (loading) return <p>Loading...</p>
 
   return (
-    <div>
-      <h1>Supabase Table Data</h1>
+    <div style={{ padding: 24, maxWidth: 720, margin: '0 auto' }}>
+      <h1 style={{ fontSize: 28, fontWeight: 700 }}>Supabase Table Data</h1>
+      <p style={{ marginTop: 8 }}>
+        Try the protected route: <Link href="/protected">/protected</Link>
+      </p>
       <ul>
         {data.length === 0 && <li>No data found yet.</li>}
         {data.map((row, i) => (
