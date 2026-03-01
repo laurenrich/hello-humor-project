@@ -21,9 +21,10 @@ export async function POST(request: NextRequest) {
   const captionId = typeof parsed.captionId === 'string' ? parsed.captionId : null;
   const value = typeof parsed.value === 'number' ? parsed.value : null;
 
-  if (!captionId || (value !== 1 && value !== -1)) {
+  // value: 1 (up), -1 (down), 0 (remove vote)
+  if (!captionId || (value !== 1 && value !== -1 && value !== 0)) {
     return json(
-      { error: 'Invalid payload. Expected { captionId: string, value: 1 | -1 }.' },
+      { error: 'Invalid payload. Expected { captionId: string, value: 1 | -1 | 0 }.' },
       400,
     );
   }
@@ -39,6 +40,35 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
+
+  if (value === 0) {
+    const { error } = await supabase
+      .from('caption_votes')
+      .delete()
+      .eq('caption_id', captionId)
+      .eq('profile_id', user.id);
+
+    if (!error) {
+      return json({ ok: true, removed: true }, 200);
+    }
+
+    const message = error.message || 'Unknown error';
+    if (
+      message.toLowerCase().includes('row-level security') ||
+      message.toLowerCase().includes('violates row-level security') ||
+      message.toLowerCase().includes('permission denied')
+    ) {
+      return json({ error: message }, 403);
+    }
+
+    return json(
+      {
+        error: `Unable to remove vote: ${message}`,
+        lastError: { message, details: error.details, code: error.code },
+      },
+      500,
+    );
+  }
 
   const { data, error } = await supabase
     .from('caption_votes')
@@ -69,7 +99,44 @@ export async function POST(request: NextRequest) {
   }
 
   if (message.toLowerCase().includes('duplicate key')) {
-    return json({ error: 'You already voted for this caption.' }, 409);
+    // Attempt to update existing vote so users can change their vote.
+    const { data: updated, error: updateError } = await supabase
+      .from('caption_votes')
+      .update({
+        vote_value: value,
+        modified_datetime_utc: now,
+      })
+      .eq('caption_id', captionId)
+      .eq('profile_id', user.id)
+      .select(
+        'id, created_datetime_utc, modified_datetime_utc, caption_id, profile_id, vote_value',
+      )
+      .single();
+
+    if (!updateError) {
+      return json({ ok: true, vote: updated, updated: true }, 200);
+    }
+
+    const updateMessage = updateError.message || 'Unknown error';
+    if (
+      updateMessage.toLowerCase().includes('row-level security') ||
+      updateMessage.toLowerCase().includes('violates row-level security') ||
+      updateMessage.toLowerCase().includes('permission denied')
+    ) {
+      return json({ error: updateMessage }, 403);
+    }
+
+    return json(
+      {
+        error: `Unable to update existing vote: ${updateMessage}`,
+        lastError: {
+          message: updateMessage,
+          details: updateError.details,
+          code: updateError.code,
+        },
+      },
+      409,
+    );
   }
 
   return json(

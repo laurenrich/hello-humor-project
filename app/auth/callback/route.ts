@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // After cookies are set, send the user to the protected page.
-  return NextResponse.redirect(new URL('/protected', request.url));
+  // After cookies are set, send the user to the app.
+  return NextResponse.redirect(new URL('/', request.url));
 }
 
