@@ -39,8 +39,6 @@ export async function POST(request: NextRequest) {
     return json({ error: 'Not authenticated.' }, 401);
   }
 
-  const now = new Date().toISOString();
-
   if (value === 0) {
     const { error } = await supabase
       .from('caption_votes')
@@ -73,14 +71,14 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from('caption_votes')
     .insert({
-      created_datetime_utc: now,
-      modified_datetime_utc: now,
       caption_id: captionId,
       profile_id: user.id,
       vote_value: value,
+      created_by_user_id: user.id,
+      modified_by_user_id: user.id,
     })
     .select(
-      'id, created_datetime_utc, modified_datetime_utc, caption_id, profile_id, vote_value',
+      'id, created_datetime_utc, modified_datetime_utc, caption_id, profile_id, vote_value, created_by_user_id, modified_by_user_id',
     )
     .single();
 
@@ -104,12 +102,12 @@ export async function POST(request: NextRequest) {
       .from('caption_votes')
       .update({
         vote_value: value,
-        modified_datetime_utc: now,
+        modified_by_user_id: user.id,
       })
       .eq('caption_id', captionId)
       .eq('profile_id', user.id)
       .select(
-        'id, created_datetime_utc, modified_datetime_utc, caption_id, profile_id, vote_value',
+        'id, created_datetime_utc, modified_datetime_utc, caption_id, profile_id, vote_value, created_by_user_id, modified_by_user_id',
       )
       .single();
 
