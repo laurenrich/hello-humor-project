@@ -29,6 +29,9 @@ export default function RateClient() {
     {},
   );
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [recentSave, setRecentSave] = useState<{ captionId: string; at: number } | null>(
+    null,
+  );
 
   const batchSize = 8;
 
@@ -212,6 +215,12 @@ export default function RateClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, captions.length, loading]);
 
+  useEffect(() => {
+    if (!recentSave) return;
+    const t = setTimeout(() => setRecentSave(null), 1200);
+    return () => clearTimeout(t);
+  }, [recentSave]);
+
   function removeAndReplace(captionId: string, nextVotedSet = votedCaptionIds) {
     setVoteError(null);
 
@@ -303,6 +312,7 @@ export default function RateClient() {
             delete next[captionId];
             return next;
           });
+          setRecentSave({ captionId, at: Date.now() });
           return;
         }
 
@@ -315,6 +325,7 @@ export default function RateClient() {
           }
           return next;
         });
+        setRecentSave({ captionId, at: Date.now() });
         return;
       }
 
@@ -354,6 +365,11 @@ export default function RateClient() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
             Rate captions
           </h1>
+          <div className="mt-1 text-sm text-zinc-400">
+            {mode === 'single'
+              ? 'Single: vote one at a time.'
+              : 'Batch: vote a grid. Click the same arrow again to undo.'}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -416,7 +432,7 @@ export default function RateClient() {
           <button
             onClick={() => refreshBatch({ excludeCurrent: true })}
             className={[
-              'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-yellow-500/15 bg-black/20 text-yellow-200 shadow-sm transition hover:bg-yellow-400/5',
+              'inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-yellow-500/15 bg-black/20 px-3 text-yellow-200 shadow-sm transition hover:bg-yellow-400/5',
               mode === 'batch' ? '' : 'pointer-events-none opacity-0',
             ].join(' ')}
             aria-label="Refresh batch"
@@ -436,6 +452,7 @@ export default function RateClient() {
               <path d="M21 12a9 9 0 1 1-3-6.7" />
               <path d="M21 3v6h-6" />
             </svg>
+            <span className="hidden sm:inline text-sm font-semibold">Refresh</span>
           </button>
         </div>
       </div>
@@ -474,6 +491,10 @@ export default function RateClient() {
                 ? 'h-52 sm:h-60'
                 : 'h-80 sm:h-[26rem]';
             const selected = selectedVotes[cap.id];
+            const justSaved =
+              Boolean(recentSave) &&
+              recentSave!.captionId === cap.id &&
+              Date.now() - recentSave!.at < 1200;
 
             return (
               <section
@@ -489,7 +510,7 @@ export default function RateClient() {
                       className={`w-full ${imageHeightClass} ${imageFitClass}`}
                       loading="lazy"
                     />
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent opacity-0 transition group-hover:opacity-100" />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-t from-black/55 to-transparent opacity-0 transition group-hover:opacity-100" />
                   </div>
                 )}
 
@@ -549,6 +570,11 @@ export default function RateClient() {
                     {isVoting && (
                       <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                         Saving…
+                      </div>
+                    )}
+                    {!isVoting && justSaved && (
+                      <div className="text-xs font-semibold text-yellow-200">
+                        Saved
                       </div>
                     )}
                   </div>

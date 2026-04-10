@@ -7,12 +7,57 @@ const BASE_URL = 'https://api.almostcrackd.ai';
 
 const SUPPORTED_TYPES = new Set([
   'image/jpeg',
-  'image/jpg',
   'image/png',
   'image/webp',
   'image/gif',
-  'image/heic',
 ]);
+
+function normalizeContentType(file: File): { contentType: string; note?: string } {
+  const raw = (file.type || '').toLowerCase();
+  if (raw === 'image/jpg') return { contentType: 'image/jpeg', note: 'normalized from image/jpg' };
+  if (raw === 'image/x-png') return { contentType: 'image/png', note: 'normalized from image/x-png' };
+  if (SUPPORTED_TYPES.has(raw)) return { contentType: raw };
+
+  const name = (file.name || '').toLowerCase();
+  const ext = name.includes('.') ? name.split('.').pop() : '';
+  if (ext === 'jpg' || ext === 'jpeg') return { contentType: 'image/jpeg', note: `inferred from .${ext}` };
+  if (ext === 'png') return { contentType: 'image/png', note: 'inferred from .png' };
+  if (ext === 'gif') return { contentType: 'image/gif', note: 'inferred from .gif' };
+  if (ext === 'webp') return { contentType: 'image/webp', note: 'inferred from .webp' };
+
+  return { contentType: raw };
+}
+
+async function reencodeToJpeg(input: Blob): Promise<Blob> {
+  const url = URL.createObjectURL(input);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Unable to decode image for re-encode.'));
+      el.src = url;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported.');
+    ctx.drawImage(img, 0, 0);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Unable to encode JPEG.'))),
+        'image/jpeg',
+        0.92,
+      );
+    });
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 type PipelineStep = 'idle' | 'presign' | 'upload' | 'register' | 'caption' | 'done' | 'error';
 
@@ -81,8 +126,27 @@ export default function UploadClient() {
       return;
     }
 
-    if (!SUPPORTED_TYPES.has(file.type)) {
-      setError(`Unsupported file type: ${file.type || '(unknown)'}`);
+    const normalized = normalizeContentType(file);
+    let contentType = normalized.contentType;
+    let uploadBody: Blob = file;
+
+    // Some “PNG” files (or PNG variants) fail server-side decoding.
+    // Re-encoding in-browser ensures bytes match a supported format.
+    if (contentType === 'image/png') {
+      try {
+        uploadBody = await reencodeToJpeg(file);
+        contentType = 'image/jpeg';
+      } catch {
+        // If re-encode fails, fall back to original bytes/type.
+        uploadBody = file;
+        contentType = normalized.contentType;
+      }
+    }
+
+    if (!SUPPORTED_TYPES.has(contentType)) {
+      setError(
+        `Unsupported file type: ${contentType || '(unknown)'}. Please use PNG, JPEG, GIF, or WEBP.`,
+      );
       return;
     }
 
@@ -96,7 +160,7 @@ export default function UploadClient() {
           authorization: `Bearer ${jwt}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ contentType: file.type }),
+        body: JSON.stringify({ contentType }),
       });
 
       if (!presignRes.ok) {
@@ -114,8 +178,8 @@ export default function UploadClient() {
       setStep('upload');
       const uploadRes = await fetch(presignPayload.presignedUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        headers: { 'Content-Type': contentType },
+        body: uploadBody,
       });
 
       if (!uploadRes.ok) {
@@ -173,7 +237,12 @@ export default function UploadClient() {
       setStep('done');
     } catch (e) {
       setStep('error');
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      const baseMessage = e instanceof Error ? e.message : 'Unknown error';
+      setError(
+        normalized.note
+          ? `${baseMessage} (Detected: ${file.type || '(none)'}; using ${contentType} — ${normalized.note})`
+          : `${baseMessage} (Detected: ${file.type || '(none)'}; using ${contentType})`,
+      );
     }
   }
 
@@ -241,7 +310,7 @@ export default function UploadClient() {
                 <div className="mt-1 text-xs text-zinc-400">
                   {file
                     ? `${file.type || 'unknown type'} • ${Math.round(file.size / 1024)} KB`
-                    : 'JPEG, PNG, WEBP, GIF, HEIC'}
+                    : 'JPEG, PNG, WEBP, GIF'}
                 </div>
               </div>
 
@@ -299,7 +368,7 @@ export default function UploadClient() {
                 ref={inputRef}
                 className="hidden"
                 type="file"
-                accept={Array.from(SUPPORTED_TYPES).join(',')}
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
               />
             </div>
@@ -336,6 +405,13 @@ export default function UploadClient() {
             </button>
           </div>
 
+          {step === 'done' && captions && (
+            <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
+              <span className="font-semibold">Generation complete.</span> You can
+              generate again or clear to upload a different image.
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               <span className="font-semibold">Error:</span> {error}
@@ -345,6 +421,9 @@ export default function UploadClient() {
 
         <section className="rounded-2xl border border-yellow-500/10 bg-zinc-950/70 p-5 shadow-sm backdrop-blur">
           <h2 className="text-lg font-semibold">Generated captions</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Captions are generated live from your uploaded image and may take a few seconds.
+          </p>
 
           {!captions ? (
             <p className="mt-3 text-sm text-zinc-400">
