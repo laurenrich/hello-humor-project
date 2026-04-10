@@ -383,7 +383,6 @@ export default function RateClient() {
                   : 'text-zinc-300 hover:bg-yellow-400/5 hover:text-yellow-200',
               ].join(' ')}
               aria-label="Single view"
-              title="Single"
             >
               <svg
                 width="18"
@@ -408,7 +407,6 @@ export default function RateClient() {
                   : 'text-zinc-300 hover:bg-yellow-400/5 hover:text-yellow-200',
               ].join(' ')}
               aria-label="Batch view"
-              title="Batch"
             >
               <svg
                 width="18"
@@ -432,11 +430,10 @@ export default function RateClient() {
           <button
             onClick={() => refreshBatch({ excludeCurrent: true })}
             className={[
-              'inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-yellow-500/15 bg-black/20 px-3 text-yellow-200 shadow-sm transition hover:bg-yellow-400/5',
+              'group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-yellow-500/15 bg-black/20 text-yellow-200 shadow-sm transition hover:bg-yellow-400/5',
               mode === 'batch' ? '' : 'pointer-events-none opacity-0',
             ].join(' ')}
             aria-label="Refresh batch"
-            title="Refresh"
           >
             <svg
               width="18"
@@ -452,7 +449,9 @@ export default function RateClient() {
               <path d="M21 12a9 9 0 1 1-3-6.7" />
               <path d="M21 3v6h-6" />
             </svg>
-            <span className="hidden sm:inline text-sm font-semibold">Refresh</span>
+            <span className="pointer-events-none absolute -bottom-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg border border-yellow-500/15 bg-zinc-950/90 px-2 py-1 text-[11px] font-semibold text-zinc-200 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 sm:block">
+              Refresh
+            </span>
           </button>
         </div>
       </div>
