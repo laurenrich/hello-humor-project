@@ -405,6 +405,13 @@ export default function UploadClient() {
             </button>
           </div>
 
+          {step === 'done' && captions && (
+            <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
+              <span className="font-semibold">Generation complete.</span> Use{' '}
+              <span className="font-semibold">Clear</span> to try a different image.
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               <span className="font-semibold">Error:</span> {error}
